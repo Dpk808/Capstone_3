@@ -49,10 +49,6 @@ jobs:
           exit-code: "0"
           ignore-unfixed: true
 
-      - name: Build application image for scanning and DAST
-        run: |
-          docker build -t upload-server-app -f app/Dockerfile app
-
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -70,17 +66,24 @@ jobs:
         with:
           projectBaseDir: .
 
-      # -------- Start app container for DAST --------
+      # -------- Build & run app for image scan and DAST --------
+      - name: Create Docker network for ZAP
+        run: docker network create zap-net
+
+      - name: Build application image
+        run: docker build -t upload-server-app -f app/Dockerfile app
+
       - name: Run upload server container
         run: |
-          docker run -d --name upload-server -p 8080:80 upload-server-app
+          docker run -d --name upload-server --network zap-net -p 8080:80 upload-server-app
 
       # -------- OWASP ZAP – DAST --------
       - name: OWASP ZAP baseline scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: "http://host.docker.internal:8080/"
+          target: "http://upload-server:80/"
           cmd_options: "-a"
+          docker_options: "--network zap-net"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
