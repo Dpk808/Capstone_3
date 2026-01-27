@@ -49,6 +49,9 @@ jobs:
           exit-code: "0"
           ignore-unfixed: true
 
+      - name: Build application image
+        run: docker build -t upload-server-app -f app/Dockerfile app
+
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -69,9 +72,6 @@ jobs:
       # -------- Build & run app for image scan and DAST --------
       - name: Create Docker network for ZAP
         run: docker network create zap-net
-
-      - name: Build application image
-        run: docker build -t upload-server-app -f app/Dockerfile app
 
       - name: Run upload server container
         run: |
