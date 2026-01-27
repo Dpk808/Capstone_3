@@ -5,7 +5,7 @@ COPY app.py .
 
 RUN pip install flask
 
-# Folder for uploads (will be replaced by PVC in Kubernetes)
+# Folder for uploads (will be replaced by PVC in Kubernetes) 2
 RUN mkdir /uploads
 
 VOLUME ["/uploads"]
