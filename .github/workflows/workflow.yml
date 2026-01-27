@@ -1,0 +1,103 @@
+name: DevSecOps Security Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  security-scans:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      # -------- Snyk – Dependency / Container Scan --------
+      - name: Set up Snyk
+        uses: snyk/actions/setup@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Snyk scan (Dockerfile)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          snyk test --file=app/Dockerfile --json > reports/snyk.json || true
+
+      # -------- Trivy – Filesystem & Image Scans --------
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "json"
+          output: "reports/trivy-fs.json"
+          exit-code: "0"
+          ignore-unfixed: true
+
+      - name: Build application image for scanning and DAST
+        run: |
+          docker build -t upload-server-app -f app/Dockerfile app
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "upload-server-app"
+          format: "json"
+          output: "reports/trivy-image.json"
+          exit-code: "0"
+          ignore-unfixed: true
+
+      # -------- SonarCloud – SAST --------
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: .
+
+      # -------- Start app container for DAST --------
+      - name: Run upload server container
+        run: |
+          docker run -d --name upload-server -p 8080:80 upload-server-app
+
+      # -------- OWASP ZAP – DAST --------
+      - name: OWASP ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: "http://host.docker.internal:8080/"
+          cmd_options: "-a"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # -------- Consolidated Report Generation --------
+      - name: Install report helper dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # No app dependencies required for report scripts
+
+      - name: Generate consolidated security summary
+        run: |
+          python scripts/report_generator.py
+
+      # -------- Upload Reports as Artifacts --------
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: reports/
+
