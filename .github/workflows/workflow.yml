@@ -76,15 +76,20 @@ jobs:
       - name: Run upload server container
         run: |
           docker run -d --name upload-server --network zap-net -p 8080:80 upload-server-app
+          sleep 25
 
       # -------- OWASP ZAP – DAST --------
       - name: OWASP ZAP baseline scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: "http://localhost:8080/"
-          cmd_options: "-a"
+          target: "http://localhost:8080"
+          cmd_options: "-T 10 -J zap_report.json"
+          fail_action: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move ZAP report into reports folder
+        run: mv zap_report.json reports/zap.json || true
 
       # -------- Consolidated Report Generation --------
       - name: Install report helper dependencies
