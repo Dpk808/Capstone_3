@@ -1,0 +1,7 @@
+scripts/
+security-reports/
+reports/
+*.log
+
+scripts/generate_project_documentation.py
+scripts/human_readable_report.py
