@@ -5,3 +5,4 @@ reports/
 
 scripts/generate_project_documentation.py
 scripts/human_readable_report.py
+.venv/
